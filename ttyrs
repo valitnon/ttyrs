@@ -40,6 +40,9 @@ function allinone_conf {
 	aiofile="$dir/allinone"
 	tmpaio=".aio.$lang"
 	result="$OUT/aio.$lang"
+	if ! [ -d $OUT ];then
+		mkdir $OUT
+	fi
 	cp $aiofile $tmpaio
 	sed -i "s/#IP#/$IP/g" $tmpaio
 	sed -i "s/#WPORT#/$WPORT/g" $tmpaio
